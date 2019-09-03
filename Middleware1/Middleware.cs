@@ -111,12 +111,14 @@ public class Middleware
                 // Connect to the Network 
                 sendSocket.Connect(remoteEP);
 
-                // Generate message
-                String message = "Msg #" + msgNum + " from Middleware " + middleWareID + " timestamp " + "<EOM>\n";
+                // send Message
 
-                // Increment msgNum
+                Console.WriteLine("Press ENTER to send message ...");
+                Console.ReadLine();
 
-                msgNum++;
+                // Generate message and increment
+                String message = "Msg #" + msgNum++ + " from Middleware " + middleWareID + " timestamp " + "<EOM>\n";
+
 
                 // Generate and encode the multicast message into a byte array.
                 //byte[] msg = Encoding.ASCII.GetBytes("From "+myPort + ": This is a test<EOM>\n");
