@@ -9,6 +9,10 @@ public class Middleware
 {
     const int myPort = 8082;
 
+    int middleWareID = 1;
+
+    int msgNum = 0;
+
     // This method sets up a socket for receiving messages from the Network
     private async void ReceiveMulticast()
     {
@@ -107,8 +111,16 @@ public class Middleware
                 // Connect to the Network 
                 sendSocket.Connect(remoteEP);
 
+                // Generate message
+                String message = "Msg #" + msgNum + " from Middleware " + middleWareID + " timestamp " + "<EOM>\n";
+
+                // Increment msgNum
+
+                msgNum++;
+
                 // Generate and encode the multicast message into a byte array.
-                byte[] msg = Encoding.ASCII.GetBytes("From "+myPort + ": This is a test<EOM>\n");
+                //byte[] msg = Encoding.ASCII.GetBytes("From "+myPort + ": This is a test<EOM>\n");
+                byte[] msg = Encoding.ASCII.GetBytes(message);
 
                 // Send the data to the network.
                 int bytesSent = sendSocket.Send(msg);
