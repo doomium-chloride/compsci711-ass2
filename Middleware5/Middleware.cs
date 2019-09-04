@@ -9,6 +9,12 @@ public class Middleware
 {
     const int myPort = 8086;
 
+    int middleWareID = 5;
+
+    int msgNum = 0;
+
+    Socket sendSocket;
+
     // This method sets up a socket for receiving messages from the Network
     private async void ReceiveMulticast()
     {
@@ -77,6 +83,7 @@ public class Middleware
     // Then, it sends a multicast message to the Netwrok.
     public void DoWork()
     {
+        Console.WriteLine("This is MW" + middleWareID);
         // Sets up a task for receiving messages from the Network.
         ReceiveMulticast();
 
@@ -98,26 +105,40 @@ public class Middleware
                 }
             }
             IPEndPoint remoteEP = new IPEndPoint(ipAddress, 8081);
-            Socket sendSocket;
+
             try
             {
-                // Create a TCP/IP  socket.
-                sendSocket = new Socket(AddressFamily.InterNetwork, SocketType.Stream, ProtocolType.Tcp);
 
-                // Connect to the Network 
-                sendSocket.Connect(remoteEP);
+                bool terminate = false;
+                do
+                {
+                    // Create a TCP/IP  socket.
+                    sendSocket = new Socket(AddressFamily.InterNetwork, SocketType.Stream, ProtocolType.Tcp);
 
-                // Generate and encode the multicast message into a byte array.
-                byte[] msg = Encoding.ASCII.GetBytes("From "+myPort + ": This is a test<EOM>\n");
+                    // Connect to the Network 
+                    sendSocket.Connect(remoteEP);
 
-                // Send the data to the network.
-                int bytesSent = sendSocket.Send(msg);
+                    // send Message
 
-                sendSocket.Shutdown(SocketShutdown.Both);
-                sendSocket.Close();
+                    Console.WriteLine("Press ENTER to send message ...");
+                    Console.ReadLine();
 
-                Console.WriteLine("Press ENTER to terminate ...");
-                Console.ReadLine();
+                    // Send the data to the network.
+                    int bytesSent = sendMessage();
+
+                    Console.WriteLine("Bytes send: {0}", bytesSent);
+
+                    Console.WriteLine("Enter x to terminate ...");
+                    string continue_code = Console.ReadLine();
+                    if (continue_code.Equals("x"))
+                        terminate = true;
+
+                    //close socket
+                    sendSocket.Shutdown(SocketShutdown.Both);
+                    sendSocket.Close();
+                } while (!terminate);
+
+
             }
             catch (ArgumentNullException ane)
             {
@@ -144,5 +165,19 @@ public class Middleware
         Middleware m = new Middleware();
         m.DoWork();
         return 0;
+    }
+
+    public int sendMessage()
+    {
+        // Generate message and increment
+        String message = "Msg #" + msgNum++ + " from Middleware " + middleWareID + " timestamp " + "<EOM>\n";
+
+
+        // Generate and encode the multicast message into a byte array.
+        //byte[] msg = Encoding.ASCII.GetBytes("From "+myPort + ": This is a test<EOM>\n");
+        byte[] msg = Encoding.ASCII.GetBytes(message);
+
+        // Send the data to the network.
+        return sendSocket.Send(msg);
     }
 }
