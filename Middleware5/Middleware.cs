@@ -4,14 +4,41 @@ using System.Net.Sockets;
 using System.Text;
 using System.Threading.Tasks;
 using System.ComponentModel;
+using System.Collections.Generic;
 
 public class Middleware
 {
+    // Depends on the folder
+
     const int myPort = 8086;
 
     int middleWareID = 5;
 
+    // Below this it should be the same
+
+    IPEndPoint remoteEP;
+
+    const int midwarecount = 5;
+
     int msgNum = 0;
+
+    int timestamp = 0;
+
+    int timestampDelivered = 0;
+
+    Queue<string> ready = new Queue<string>();
+
+    Dictionary<string, int> received =
+            new Dictionary<string, int>();
+
+    SortedDictionary<string, string> deliverable =
+            new SortedDictionary<string, string>();
+
+    Dictionary<string, int[]> sent =
+            new Dictionary<string, int[]>();
+
+    Dictionary<string, int> timestampConfirmed =
+            new Dictionary<string, int>();
 
     Socket sendSocket;
 
@@ -69,7 +96,9 @@ public class Middleware
                         break;
                     }
                 }
-                Console.WriteLine("msg received:    {0}", data);
+                processData(data);
+                //Console.WriteLine("msg received:    {0}", data);
+
             }
 
         }
@@ -104,7 +133,7 @@ public class Middleware
                     break;
                 }
             }
-            IPEndPoint remoteEP = new IPEndPoint(ipAddress, 8081);
+            remoteEP = new IPEndPoint(ipAddress, 8081);
 
             try
             {
@@ -113,29 +142,24 @@ public class Middleware
                 do
                 {
                     // Create a TCP/IP  socket.
-                    sendSocket = new Socket(AddressFamily.InterNetwork, SocketType.Stream, ProtocolType.Tcp);
+                    //sendSocket = new Socket(AddressFamily.InterNetwork, SocketType.Stream, ProtocolType.Tcp);
 
                     // Connect to the Network 
-                    sendSocket.Connect(remoteEP);
+                    //sendSocket.Connect(remoteEP);
 
                     // send Message
 
-                    Console.WriteLine("Press ENTER to send message ...");
-                    Console.ReadLine();
-
-                    // Send the data to the network.
-                    int bytesSent = sendMessage();
-
-                    Console.WriteLine("Bytes send: {0}", bytesSent);
-
-                    Console.WriteLine("Enter x to terminate ...");
+                    Console.WriteLine("Enter x to send message and close. Enter to just send message...");
                     string continue_code = Console.ReadLine();
                     if (continue_code.Equals("x"))
                         terminate = true;
 
+                    // Send the data to the network.
+                    sendMessage();
+
                     //close socket
-                    sendSocket.Shutdown(SocketShutdown.Both);
-                    sendSocket.Close();
+                    //sendSocket.Shutdown(SocketShutdown.Both);
+                    //sendSocket.Close();
                 } while (!terminate);
 
 
@@ -167,17 +191,143 @@ public class Middleware
         return 0;
     }
 
-    public int sendMessage()
+    //Increments after returning
+    string genTimestamp()
     {
-        // Generate message and increment
-        String message = "Msg #" + msgNum++ + " from Middleware " + middleWareID + " timestamp " + "<EOM>\n";
+        return "$" + timestamp++ + "$";
+    }
 
+    //Don't increment, just return with added $$
+    string timestring(int time)
+    {
+        return "$" + time + "$";
+    }
+    string getTimestamp(int otherStamp)
+    {
+        return timestring(Math.Max(timestamp, otherStamp));
+    }
+    string getTimestamp()
+    {
+        return timestring(timestamp);
+    }
+
+
+    public void sendMessage()
+    {
+        // Create a TCP/IP  socket.
+        sendSocket = new Socket(AddressFamily.InterNetwork, SocketType.Stream, ProtocolType.Tcp);
+
+        // Connect to the Network 
+        sendSocket.Connect(remoteEP);
+
+        // Generate message and increment
+        string body = "Msg #" + msgNum++ + " from Middleware @" + middleWareID;
+
+        string message = body + genTimestamp() + middleWareID + "<EOM>\n";
+
+        sent.Add(body, new int[] { timestamp, 1 });
 
         // Generate and encode the multicast message into a byte array.
         //byte[] msg = Encoding.ASCII.GetBytes("From "+myPort + ": This is a test<EOM>\n");
         byte[] msg = Encoding.ASCII.GetBytes(message);
 
         // Send the data to the network.
-        return sendSocket.Send(msg);
+        sendSocket.Send(msg);
+
+        // Create a TCP/IP  socket.
+        sendSocket = new Socket(AddressFamily.InterNetwork, SocketType.Stream, ProtocolType.Tcp);
+
+        // Connect to the Network 
+        sendSocket.Connect(remoteEP);
+    }
+
+    void updateTimestamp(int newTime)
+    {
+        timestamp = Math.Max(newTime, timestamp);
+    }
+
+    void proposeTimestamp(string message, int msgStamp)
+    {
+        // Create a TCP/IP  socket.
+        sendSocket = new Socket(AddressFamily.InterNetwork, SocketType.Stream, ProtocolType.Tcp);
+
+        // Connect to the Network 
+        sendSocket.Connect(remoteEP);
+
+        string proposal = "timestamp:" + message + getTimestamp(msgStamp) + middleWareID + "<EOM>\n";
+        // Generate and encode the multicast message into a byte array.
+        byte[] msg = Encoding.ASCII.GetBytes(proposal);
+        // Send the data to the network.
+        Console.WriteLine("proposed own timestammp");
+        sendSocket.Send(msg);
+
+        // Create a TCP/IP  socket.
+        sendSocket = new Socket(AddressFamily.InterNetwork, SocketType.Stream, ProtocolType.Tcp);
+
+        // Connect to the Network 
+        sendSocket.Connect(remoteEP);
+    }
+
+    void confirmTimestamp(string message, int finalTimestamp)
+    {
+        string shirase = "confirm:" + message + timestring(finalTimestamp) + middleWareID + "<EOM>\n";
+        // Generate and encode the multicast message into a byte array.
+        byte[] msg = Encoding.ASCII.GetBytes(shirase);
+        // Send the data to the network.
+        Console.WriteLine("sending confirmation");
+        sendSocket.Send(msg);
+
+        // Create a TCP/IP  socket.
+        sendSocket = new Socket(AddressFamily.InterNetwork, SocketType.Stream, ProtocolType.Tcp);
+
+        // Connect to the Network 
+        sendSocket.Connect(remoteEP);
+    }
+
+    void processData(string data)
+    {
+        // format is... info$timestamp$eom
+        string[] dataFrag = data.Split('$');
+        int dataTime = Int32.Parse(dataFrag[1]);
+        string dataBody = dataFrag[0];
+        int midWareID = Int32.Parse(dataBody.Split('@')[1]);
+        Console.WriteLine("middleware id = {0}", midWareID);
+        if (dataBody.StartsWith("M"))
+        {
+            received.Add(dataBody, Math.Max(dataTime, timestamp));
+            if (midWareID != middleWareID)
+                proposeTimestamp(dataBody, dataTime);
+            Console.WriteLine("received message:{0}", data);
+        }
+        else if (midWareID == middleWareID && dataBody.StartsWith("t"))
+        {
+            // int[]{ timestamp, middlewares replied. starts at 1
+            string messageBody = dataBody.Split(':')[1];
+            int[] current_status = sent[messageBody];
+            current_status[0] = Math.Max(current_status[0], dataTime);
+            current_status[1]++;
+            Console.WriteLine(current_status[1]);
+            if (current_status[1] == midwarecount)
+            {
+                Console.WriteLine("entered confirm zone");
+                timestampConfirmed.Add(messageBody, current_status[0]);
+                confirmTimestamp(messageBody, current_status[0]);
+                //sent.Remove(messageBody);
+            }
+            Console.WriteLine("received timestamp:{0}", data);
+        }
+        else if (dataBody.StartsWith("c"))
+        {
+            string messageBody = dataBody.Split(':')[1];
+            int finalTimestamp = dataTime;
+            string deliveryKey = finalTimestamp + ":" + midWareID;
+            Console.WriteLine("Adding to deliverable:{0}", deliveryKey);
+            deliverable.Add(deliveryKey, messageBody);
+            Console.WriteLine("received final:{0}", data);
+            foreach (string x in deliverable.Values)
+            {
+                Console.WriteLine("deliverable:{0}", x);
+            }
+        }
     }
 }

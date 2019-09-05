@@ -1,4 +1,4 @@
-csc /out:Network\Network.exe project\Network\Network.cs 
+csc /out:Network\Network.exe Network\Network.cs 
 csc /out:Middleware1\Middleware.exe Middleware1\Middleware.cs
 csc /out:Middleware2\Middleware.exe Middleware2\Middleware.cs
 csc /out:Middleware3\Middleware.exe Middleware3\Middleware.cs
