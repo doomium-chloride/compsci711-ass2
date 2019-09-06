@@ -5,6 +5,7 @@ using System.Text;
 using System.Threading.Tasks;
 using System.ComponentModel;
 using System.Collections.Generic;
+using System.Linq;
 
 public class Middleware
 {
@@ -23,8 +24,6 @@ public class Middleware
     int msgNum = 0;
 
     int timestamp = 0;
-
-    int timestampDelivered = 0;
 
     Queue<string> ready = new Queue<string>();
 
@@ -139,6 +138,10 @@ public class Middleware
             {
 
                 bool terminate = false;
+
+                // Create a TCP/IP  socket.
+                sendSocket = new Socket(AddressFamily.InterNetwork, SocketType.Stream, ProtocolType.Tcp);
+
                 do
                 {
                     // Create a TCP/IP  socket.
@@ -214,8 +217,6 @@ public class Middleware
 
     public void sendMessage()
     {
-        // Create a TCP/IP  socket.
-        sendSocket = new Socket(AddressFamily.InterNetwork, SocketType.Stream, ProtocolType.Tcp);
 
         // Connect to the Network 
         sendSocket.Connect(remoteEP);
@@ -284,6 +285,38 @@ public class Middleware
         sendSocket.Connect(remoteEP);
     }
 
+    string timeOrder(int timestamp, int id)
+    {
+        return String.Format("{0:D8}.{1:D8}", timestamp, id);
+    }
+
+    void deliver()
+    {
+        List<KeyValuePair<string, string>> keyList = deliverable.ToList();
+
+        foreach (KeyValuePair<string, string> item in keyList)
+        {
+            if (received.ContainsKey(item.Value))
+            {
+                List<KeyValuePair<string, int>> receivedList = sortReceived();
+
+                if (receivedList[0].Key != item.Value) return;
+
+                string timestampString = item.Key.Split('.')[0];
+                int thisTimestamp = Int32.Parse(timestampString);
+                string delivery = item.Value + "$" + thisTimestamp;
+                ready.Enqueue(delivery);
+                received.Remove(item.Value);
+                deliverable.Remove(item.Key);
+            }
+        }
+        //print ready
+        foreach (string str in ready)
+        {
+            Console.WriteLine("ready:{0}", str);
+        }
+    }
+
     void processData(string data)
     {
         // format is... info$timestamp$eom
@@ -294,9 +327,10 @@ public class Middleware
         Console.WriteLine("middleware id = {0}", midWareID);
         if (dataBody.StartsWith("M"))
         {
-            received.Add(dataBody, Math.Max(dataTime, timestamp));
+            int proposeTime = Math.Max(dataTime, timestamp);
+            received.Add(dataBody, proposeTime);
             if (midWareID != middleWareID)
-                proposeTimestamp(dataBody, dataTime);
+                proposeTimestamp(dataBody, proposeTime);
             Console.WriteLine("received message:{0}", data);
         }
         else if (midWareID == middleWareID && dataBody.StartsWith("t"))
@@ -320,7 +354,7 @@ public class Middleware
         {
             string messageBody = dataBody.Split(':')[1];
             int finalTimestamp = dataTime;
-            string deliveryKey = finalTimestamp + ":" + midWareID;
+            string deliveryKey = timeOrder(finalTimestamp, midWareID);
             Console.WriteLine("Adding to deliverable:{0}", deliveryKey);
             deliverable.Add(deliveryKey, messageBody);
             Console.WriteLine("received final:{0}", data);
@@ -329,5 +363,21 @@ public class Middleware
                 Console.WriteLine("deliverable:{0}", x);
             }
         }
+        deliver();
+    }
+
+    List<KeyValuePair<string, int>> sortReceived()
+    {
+        List<KeyValuePair<string, int>> myList = received.ToList();
+
+        myList.Sort(
+            delegate (KeyValuePair<string, int> pair1,
+            KeyValuePair<string, int> pair2)
+            {
+                return pair1.Value.CompareTo(pair2.Value);
+            }
+        );
+
+        return myList;
     }
 }
